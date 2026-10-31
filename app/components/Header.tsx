@@ -106,7 +106,8 @@ export default function Header({ inFolder, onNew }: HeaderProps) {
 
       if (!active) return;
 
-      if (!user) {
+      // Belum login (atau hanya sesi anonim): perlakukan sebagai tamu
+      if (!user || user.is_anonymous) {
         setProfile(null);
         setAuthState("guest");
         return;
@@ -183,7 +184,8 @@ export default function Header({ inFolder, onNew }: HeaderProps) {
   return (
     <header>
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
-        <div className="flex items-center gap-2.5">
+        {/* Brand: di mobile hanya ikon, teks tampil mulai layar sm */}
+        <div className="flex shrink-0 items-center gap-2.5">
           <Image
             src="/icons/icon-192.png"
             alt="Logo Sitensi"
@@ -192,49 +194,66 @@ export default function Header({ inFolder, onNew }: HeaderProps) {
             priority
             className="h-10 w-10 shrink-0 object-contain"
           />
-          <span className="text-lg font-semibold tracking-tight">Sitensi</span>
+          <span className="hidden text-lg font-semibold tracking-tight sm:inline">Sitensi</span>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Tombol Baru + dropdown */}
-          <div ref={newMenuRef} className="relative">
-            <button
-              onClick={() => setOpenMenu((v) => (v === "new" ? null : "new"))}
-              aria-haspopup="menu"
-              aria-expanded={openMenu === "new"}
-              className="inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:px-4 sm:py-2.5"
+        <div className="flex min-w-0 items-center gap-2">
+          {/* Tamu: pemberitahuan login menggantikan tombol Baru */}
+          {authState === "guest" && (
+            <Link
+              href="/login"
+              className="min-w-0 rounded-2xl border border-blue-100 bg-blue-50 px-3 py-1.5 text-left hover:border-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
-              <PlusIcon />
-              <span>Baru</span>
-              <ChevronDown className={`h-4 w-4 transition-transform ${openMenu === "new" ? "rotate-180" : ""}`} />
-            </button>
+              <span className="block truncate text-xs font-semibold text-blue-700 sm:text-sm">
+                Masuk untuk membuat buku absen
+              </span>
+              <span className="block truncate text-[11px] text-blue-600/80 sm:text-xs">
+                Coba gratis 19 hari
+              </span>
+            </Link>
+          )}
 
-            {openMenu === "new" && (
-              <div
-                role="menu"
-                className="absolute right-0 z-40 mt-2 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-lg"
+          {/* Pengguna login: tombol Baru + dropdown */}
+          {authState === "user" && (
+            <div ref={newMenuRef} className="relative">
+              <button
+                onClick={() => setOpenMenu((v) => (v === "new" ? null : "new"))}
+                aria-haspopup="menu"
+                aria-expanded={openMenu === "new"}
+                className="inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:px-4 sm:py-2.5"
               >
-                <button
-                  role="menuitem"
-                  onClick={() => handleNew("book")}
-                  className={menuItemClass}
+                <PlusIcon />
+                <span>Baru</span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${openMenu === "new" ? "rotate-180" : ""}`} />
+              </button>
+
+              {openMenu === "new" && (
+                <div
+                  role="menu"
+                  className="absolute right-0 z-40 mt-2 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-lg"
                 >
-                  <BookIcon className="h-5 w-5 text-blue-600" />
-                  Buku Absen Baru
-                </button>
-                {!inFolder && (
                   <button
                     role="menuitem"
-                    onClick={() => handleNew("folder")}
+                    onClick={() => handleNew("book")}
                     className={menuItemClass}
                   >
-                    <FolderIcon className="h-5 w-5 text-blue-600" />
-                    Folder Baru
+                    <BookIcon className="h-5 w-5 text-blue-600" />
+                    Buku Absen Baru
                   </button>
-                )}
-              </div>
-            )}
-          </div>
+                  {!inFolder && (
+                    <button
+                      role="menuitem"
+                      onClick={() => handleNew("folder")}
+                      className={menuItemClass}
+                    >
+                      <FolderIcon className="h-5 w-5 text-blue-600" />
+                      Folder Baru
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Profil: bulatan jika sudah login, tombol Masuk jika belum */}
           {authState === "loading" && (
@@ -244,7 +263,7 @@ export default function Header({ inFolder, onNew }: HeaderProps) {
           {authState === "guest" && (
             <Link
               href="/login"
-              className="ml-1 inline-flex h-10 cursor-pointer items-center rounded-full border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:border-blue-300 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="inline-flex h-10 shrink-0 cursor-pointer items-center rounded-full border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 hover:border-blue-300 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               Masuk
             </Link>

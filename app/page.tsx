@@ -116,6 +116,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [guest, setGuest] = useState(false);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalType>(null);
   const [name, setName] = useState("");
@@ -141,15 +142,41 @@ export default function Home() {
   const currentFolder = currentFolderId ? folderMap.get(currentFolderId) ?? null : null;
   const q = query.trim().toLowerCase();
 
+  // Muat folder dan buku milik pengguna saat ini (akun biasa atau tamu)
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
+    const { data: userData } = await supabase.auth.getUser();
+    let user = userData.user;
+
+    // Belum login: coba buat sesi tamu secara diam-diam
+    if (!user) {
+      const { data } = await supabase.auth.signInAnonymously();
+      user = data?.user ?? null;
+    }
+
+    // Tidak ada identitas sama sekali: tampilkan kosong tanpa pesan galat
+    if (!user) {
+      setGuest(true);
+      setFolders([]);
+      setBooks([]);
+      setLoading(false);
+      return;
+    }
+
+    setGuest(false);
+
     const [foldersRes, booksRes] = await Promise.all([
-      supabase.from("folders").select("id, name, parent_id").order("created_at", { ascending: true }),
+      supabase
+        .from("folders")
+        .select("id, name, parent_id")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true }),
       supabase
         .from("books")
         .select("id, name, folder_id, created_at")
+        .eq("user_id", user.id)
         .order("created_at", { ascending: true }),
     ]);
 
@@ -437,7 +464,9 @@ export default function Home() {
   }
 
   function goBack() {
-    setCurrentFolderId(currentFolder?.parentId ?? null);
+    // Di root tombol kembali beku: tidak melakukan apa-apa
+    if (!currentFolder) return;
+    setCurrentFolderId(currentFolder.parentId ?? null);
     setQuery("");
   }
 
@@ -472,6 +501,11 @@ export default function Home() {
   }, [modal, moving, cardMenu, deleting, deleteBusy]);
 
   function openModal(type: ModalType) {
+    // Tamu tanpa identitas tidak bisa menyimpan data: arahkan ke login
+    if (guest) {
+      router.push("/login");
+      return;
+    }
     setName("");
     setModal(type);
   }
@@ -522,6 +556,7 @@ export default function Home() {
 
   const isEmpty = visibleFolders.length === 0 && visibleBooks.length === 0;
   const path = pathTo(currentFolderId);
+  const atRoot = !currentFolder;
 
   // Daftar folder di dialog pemindah
   const pickerFolder = pickerId ? folderMap.get(pickerId) ?? null : null;
@@ -587,31 +622,40 @@ export default function Home() {
       <Header inFolder={false} onNew={openModal} />
 
       <main className="mx-auto max-w-5xl px-4 pb-10 pt-2 sm:px-6 sm:pt-4">
-        {/* Navigasi folder: tombol kembali + kotak jalur yang bisa di-scroll */}
-        {currentFolder && (
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={goBack}
-              aria-label="Kembali ke folder sebelumnya"
-              className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
+        {/* Navigasi folder: selalu tampil. Di root, tombol kembali beku. */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={goBack}
+            disabled={atRoot}
+            aria-label="Kembali ke folder sebelumnya"
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border focus:outline-none ${
+              atRoot
+                ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-300"
+                : "cursor-pointer border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500"
+            }`}
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
 
-            <nav
-              aria-label="Lokasi folder"
-              className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white"
+          <nav
+            aria-label="Lokasi folder"
+            className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white"
+          >
+            <div
+              ref={crumbRef}
+              onWheel={(e) => {
+                if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                  e.currentTarget.scrollLeft += e.deltaY;
+                }
+              }}
+              className="flex flex-nowrap items-center gap-1 overflow-x-auto whitespace-nowrap px-2 py-1.5 text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
-              <div
-                ref={crumbRef}
-                onWheel={(e) => {
-                  if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-                    e.currentTarget.scrollLeft += e.deltaY;
-                  }
-                }}
-                className="flex flex-nowrap items-center gap-1 overflow-x-auto whitespace-nowrap px-2 py-1.5 text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              >
+              {atRoot ? (
+                <span className="shrink-0 px-2.5 py-1 font-medium text-slate-700">
+                  Semua buku
+                </span>
+              ) : (
                 <button
                   type="button"
                   onClick={goRoot}
@@ -624,37 +668,37 @@ export default function Home() {
                 >
                   Semua buku
                 </button>
+              )}
 
-                {path.map((f, i) => {
-                  const last = i === path.length - 1;
-                  return (
-                    <span key={f.id} className="flex shrink-0 items-center gap-1">
-                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
-                      {last ? (
-                        <span className="shrink-0 px-2.5 py-1 font-medium text-slate-700">
-                          {f.name}
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => openFolder(f.id)}
-                          {...dropProps(f.id)}
-                          className={`shrink-0 cursor-pointer rounded-full px-2.5 py-1 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                            dropTarget === f.id
-                              ? "bg-blue-100 text-blue-700 ring-2 ring-blue-300"
-                              : "text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-                          }`}
-                        >
-                          {f.name}
-                        </button>
-                      )}
-                    </span>
-                  );
-                })}
-              </div>
-            </nav>
-          </div>
-        )}
+              {path.map((f, i) => {
+                const last = i === path.length - 1;
+                return (
+                  <span key={f.id} className="flex shrink-0 items-center gap-1">
+                    <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                    {last ? (
+                      <span className="shrink-0 px-2.5 py-1 font-medium text-slate-700">
+                        {f.name}
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => openFolder(f.id)}
+                        {...dropProps(f.id)}
+                        className={`shrink-0 cursor-pointer rounded-full px-2.5 py-1 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                          dropTarget === f.id
+                            ? "bg-blue-100 text-blue-700 ring-2 ring-blue-300"
+                            : "text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                        }`}
+                      >
+                        {f.name}
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
+            </div>
+          </nav>
+        </div>
 
         {/* Pesan galat */}
         {error && (
@@ -673,7 +717,7 @@ export default function Home() {
         )}
 
         {/* Pencarian */}
-        <div className={`relative ${currentFolder ? "mt-4" : "mt-2"}`}>
+        <div className="relative mt-4">
           <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
           <input
             type="search"
