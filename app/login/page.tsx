@@ -27,7 +27,13 @@ function GoogleIcon({ className = "h-5 w-5" }: { className?: string }) {
 
 export default function LoginPage() {
   const router = useRouter();
-  const supabase = useMemo(() => createClient(), []);
+  const supabase = useMemo(() => {
+    try {
+      return createClient();
+    } catch {
+      return null;
+    }
+  }, []);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -39,9 +45,18 @@ export default function LoginPage() {
       ? "Login dengan Google gagal. Coba lagi."
       : null
   );
+  const [configError] = useState(() => {
+    try {
+      createClient();
+      return null;
+    } catch (error) {
+      return error instanceof Error ? error.message : "Konfigurasi Supabase tidak valid.";
+    }
+  });
 
   // Jika sudah login, langsung ke beranda. Tampilkan galat dari callback Google.
   useEffect(() => {
+    if (!supabase) return;
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) router.replace("/");
     });
@@ -54,10 +69,24 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
+    if (!supabase) {
+      setError(configError ?? "Konfigurasi Supabase tidak valid.");
+      setLoading(false);
+      return;
+    }
+
+    let error: { message: string } | null;
+    try {
+      const result = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      error = result.error;
+    } catch {
+      setError("Tidak dapat terhubung ke Supabase. Periksa konfigurasi production dan hostname Supabase.");
+      setLoading(false);
+      return;
+    }
 
     if (error) {
       setError(
@@ -79,10 +108,24 @@ export default function LoginPage() {
     setGoogleLoading(true);
     setError(null);
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
+    if (!supabase) {
+      setError(configError ?? "Konfigurasi Supabase tidak valid.");
+      setGoogleLoading(false);
+      return;
+    }
+
+    let error: { message: string } | null;
+    try {
+      const result = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      });
+      error = result.error;
+    } catch {
+      setError("Tidak dapat terhubung ke Supabase. Periksa konfigurasi production dan hostname Supabase.");
+      setGoogleLoading(false);
+      return;
+    }
 
     if (error) {
       setError(error.message);
