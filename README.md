@@ -16,6 +16,16 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Variabel lingkungan rekap
+
+Tambahkan nilai berikut ke Codespaces secrets atau `.env.local`, dan ke environment Vercel:
+
+- `NEXT_PUBLIC_SITE_URL` — URL produksi aplikasi, contoh `https://sitensi.vercel.app`.
+- `RESEND_API_KEY` — API key Resend.
+- `RECAP_FROM_EMAIL` — alamat pengirim terverifikasi, contoh `Sitensi <rekap@domainanda.com>`.
+
+Template tersedia di `.env.example`.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import ModalShell from "./ModalShell";
+import ActionItem from "./ActionItem";
 import { ChevronRight, ColumnsIcon, UserPlusIcon, XIcon } from "./icons";
 
 export type MenuFeature = {
@@ -94,33 +95,14 @@ export default function AddMenuModal({ features, onAddManual, onDefineFields, on
           const available = Boolean(f.onClick);
           return (
             <li key={f.id}>
-              <button
-                type="button"
+              <ActionItem
+                icon={f.icon}
+                title={f.title}
+                description={f.description}
                 onClick={f.onClick}
                 disabled={!available}
-                className="flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-left hover:border-blue-300 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:hover:border-slate-200"
-              >
-                <div
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                    available ? "bg-blue-50 text-blue-600" : "bg-slate-100 text-slate-400"
-                  }`}
-                >
-                  {f.icon}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p
-                    className={`text-sm font-medium ${available ? "text-slate-900" : "text-slate-500"}`}
-                  >
-                    {f.title}
-                  </p>
-                  <p className="mt-0.5 text-xs text-slate-500">{f.description}</p>
-                </div>
-                {!available && (
-                  <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
-                    Segera
-                  </span>
-                )}
-              </button>
+                soon={!available}
+              />
             </li>
           );
         })}

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 type Props = {
   children: ReactNode;
@@ -21,8 +21,18 @@ export default function ModalShell({
   layer = "z-50",
   panelClassName = "",
 }: Props) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    const panel = panelRef.current;
+    panel?.querySelector<HTMLElement>("button, input, [tabindex]:not([tabindex='-1'])")?.focus();
+    return () => previous?.focus();
+  }, []);
+
   return (
     <div
+      ref={panelRef}
       className={`fixed inset-0 ${layer} flex items-end justify-center bg-slate-900/40 sm:items-center sm:p-4`}
       onClick={onClose}
       role="presentation"

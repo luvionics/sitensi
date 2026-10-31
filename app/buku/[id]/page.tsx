@@ -19,8 +19,8 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  CopyIcon,
   DownloadIcon,
+  DocumentIcon,
   PlusIcon,
   ReorderIcon,
   SearchIcon,
@@ -37,6 +37,10 @@ import FieldsModal from "./components/FieldsModal";
 import ConfirmModal from "./components/ConfirmModal";
 import Toast from "./components/Toast";
 import ShareModal from "./components/ShareModal";
+import ShareRecapSheet from "./components/ShareRecapSheet";
+import ParticipantImportModal from "./components/ParticipantImportModal";
+import ParticipantExportModal from "./components/ParticipantExportModal";
+import ParticipantRecapSheet from "./components/ParticipantRecapSheet";
 
 // Tujuan tombol kembali dari halaman buku.
 // Buku yang berada di folder kembali ke folder itu; buku tanpa folder kembali ke beranda.
@@ -241,14 +245,22 @@ function BukuAbsensiContent() {
   // Modal menu tambah (tombol + di header)
   const [menuOpen, setMenuOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [recapShareOpen, setRecapShareOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [recapParticipant, setRecapParticipant] = useState<Participant | null>(null);
   const [detailBusy, setDetailBusy] = useState(false);
   const detailTarget = detailId ? participants.find((p) => p.id === detailId) ?? null : null;
 
   useEffect(() => {
     if (!detailId) return;
     let cancelled = false;
+    void supabase.from("participant_fields").select("id, key, label, sort_order").eq("book_id", bookId).order("sort_order")
+      .then(({ data }) => {
+        if (!cancelled && data) setFields((data as FieldRow[]).map(toField));
+      });
     void supabase
       .from("participants")
       .select("id, name, email, data, sort_order")
@@ -275,12 +287,23 @@ function BukuAbsensiContent() {
   const extraFeatures: MenuFeature[] = [
     {
       id: "share",
-      title: "Bagikan buku absen",
-      description: "Peserta bisa mendaftar dan mengisi datanya sendiri di buku absensi ini lewat tautan.",
+      title: "Bagikan pendaftaran buku absen",
+      description: "Peserta bisa mendaftar dan mengisi datanya sendiri lewat tautan.",
       icon: <ShareIcon className="h-5 w-5" />,
       onClick: () => {
         setMenuOpen(false);
         setShareOpen(true);
+      },
+    },
+    {
+      id: "share-recap",
+      title: "Bagikan rekap buku absen",
+      description: "Kirim rekap seluruh peserta lewat email atau tautan.",
+      icon: <DocumentIcon className="h-5 w-5" />,
+      onClick: () => {
+        setMenuOpen(false);
+        setRecapParticipant(null);
+        setRecapShareOpen(true);
       },
     },
     {
@@ -298,18 +321,14 @@ function BukuAbsensiContent() {
       title: "Impor dari Excel/CSV",
       description: "Tambah banyak peserta sekaligus dari satu file.",
       icon: <UploadIcon className="h-5 w-5" />,
+      onClick: () => { setMenuOpen(false); setImportOpen(true); },
     },
     {
       id: "export",
       title: "Ekspor rekap absensi",
       description: "Unduh rekap kehadiran per tanggal atau per peserta.",
       icon: <DownloadIcon className="h-5 w-5" />,
-    },
-    {
-      id: "copy",
-      title: "Salin dari buku lain",
-      description: "Pakai daftar peserta dan kolom dari buku absensi yang sudah ada.",
-      icon: <CopyIcon className="h-5 w-5" />,
+      onClick: () => { setMenuOpen(false); setExportOpen(true); },
     },
   ];
 
@@ -700,7 +719,7 @@ function BukuAbsensiContent() {
 
   // Escape menutup dialog (konfirmasi dan edit kolom ditutup lebih dulu)
   useEffect(() => {
-    if (!formMode && !fieldsOpen && !confirm && !dateOpen && !actionTarget && !menuOpen && !shareOpen && !detailTarget && !reorderOpen) return;
+    if (!formMode && !fieldsOpen && !confirm && !dateOpen && !actionTarget && !menuOpen && !shareOpen && !recapShareOpen && !detailTarget && !reorderOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (confirm) {
@@ -713,6 +732,10 @@ function BukuAbsensiContent() {
       }
       setMenuOpen(false);
       setShareOpen(false);
+      setRecapShareOpen(false);
+      setImportOpen(false);
+      setExportOpen(false);
+      setRecapParticipant(null);
       setReorderOpen(false);
       setDetailId(null);
       setFormMode(null);
@@ -723,7 +746,7 @@ function BukuAbsensiContent() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [formMode, fieldsOpen, confirm, confirmBusy, dateOpen, actionTarget, editFieldId, menuOpen, shareOpen, detailTarget, reorderOpen]);
+  }, [formMode, fieldsOpen, confirm, confirmBusy, dateOpen, actionTarget, editFieldId, menuOpen, shareOpen, recapShareOpen, detailTarget, reorderOpen]);
 
   const visibleParticipants = participants;
 
@@ -1559,6 +1582,13 @@ function BukuAbsensiContent() {
             </button>
           )}
 
+          {importOpen && (
+            <ParticipantImportModal supabase={supabase} bookId={book.id} bookName={book.name} onImported={() => void refreshParticipantList()} onNotice={(message, isError) => isError ? setError(message) : setNotice(message)} onClose={() => setImportOpen(false)} />
+          )}
+          {exportOpen && (
+            <ParticipantExportModal supabase={supabase} bookId={book.id} bookName={book.name} onNotice={(message, isError) => isError ? setError(message) : setNotice(message)} onClose={() => setExportOpen(false)} />
+          )}
+
           <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1.5 text-sm text-slate-600">
             {STATUSES.map((s) => (
               <span key={s} className="flex items-center gap-1.5">
@@ -1718,6 +1748,17 @@ function BukuAbsensiContent() {
             closeActions();
             setDetailId(p.id);
           }}
+          onViewRecap={() => {
+            const p = actionTarget;
+            closeActions();
+            setRecapParticipant(p);
+          }}
+          onShare={() => {
+            const p = actionTarget;
+            closeActions();
+            setRecapParticipant(p);
+            setRecapShareOpen(true);
+          }}
           onClose={closeActions}
         />
       )}
@@ -1789,6 +1830,16 @@ function BukuAbsensiContent() {
         />
       )}
 
+      {recapParticipant && !recapShareOpen && (
+        <ParticipantRecapSheet
+          supabase={supabase}
+          bookId={bookId}
+          participant={recapParticipant}
+          onShare={() => setRecapShareOpen(true)}
+          onClose={() => setRecapParticipant(null)}
+        />
+      )}
+
       {/* Modal atur urutan peserta */}
       {reorderOpen && (
         <ReorderParticipantsModal
@@ -1837,6 +1888,26 @@ function BukuAbsensiContent() {
           onToggle={toggleShare}
           onRegenerate={regenerateShare}
           onClose={() => setShareOpen(false)}
+        />
+      )}
+
+      {recapShareOpen && (
+        <ShareRecapSheet
+          bookId={book.id}
+          participantId={recapParticipant?.id}
+          participantName={recapParticipant?.name}
+          defaultEmail={recapParticipant?.email}
+          onRequestEditEmail={() => {
+            if (!recapParticipant) return;
+            const participant = recapParticipant;
+            setRecapShareOpen(false);
+            openEdit(participant);
+          }}
+          onClose={() => {
+            setRecapShareOpen(false);
+            setRecapParticipant(null);
+          }}
+          onNotice={(message, isError) => isError ? setError(message) : setNotice(message)}
         />
       )}
 

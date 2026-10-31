@@ -1,7 +1,8 @@
 import type { Participant } from "./types";
 import { STATUSES, STATUS_DOT, STATUS_LABEL, type Status } from "./status";
 import ModalShell from "./ModalShell";
-import { PencilIcon, TrashIcon, XIcon } from "./icons";
+import { EyeIcon, PencilIcon, ShareIcon, TrashIcon, XIcon, DocumentIcon } from "./icons";
+import ActionItem from "./ActionItem";
 
 type Props = {
   participant: Participant;
@@ -10,6 +11,8 @@ type Props = {
   onEdit: () => void;
   onDelete: () => void;
   onViewDetail: () => void;
+  onViewRecap: () => void;
+  onShare: () => void;
   onClose: () => void;
 };
 
@@ -19,6 +22,8 @@ export default function ParticipantActionModal({
   onEdit,
   onDelete,
   onViewDetail,
+  onViewRecap,
+  onShare,
   onClose,
 }: Props) {
   const total = counts ? STATUSES.reduce((sum, s) => sum + counts[s], 0) : 0;
@@ -69,36 +74,14 @@ export default function ParticipantActionModal({
         </div>
       </div>
 
-      {/* Data lengkap peserta */}
-      <button
-        type="button"
-        aria-haspopup="dialog"
-        onClick={onViewDetail}
-        className="mt-5 w-full rounded-2xl border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-      >
-        Lihat data lengkap
-      </button>
-
-      {/* Edit */}
-      <button
-        type="button"
-        onClick={onEdit}
-        className="mt-5 flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-blue-600 py-3 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-      >
-        <PencilIcon className="h-4 w-4" />
-        Edit peserta
-      </button>
-
-      {/* Hapus (paling bawah) */}
-      <div className="mt-5 border-t border-slate-100 pt-5">
-        <button
-          type="button"
-          onClick={onDelete}
-          className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border border-red-200 py-3 text-sm font-medium text-red-600 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-        >
-          <TrashIcon className="h-4 w-4" />
-          Hapus peserta
-        </button>
+      <div className="mt-5 space-y-2">
+        <ActionItem icon={<EyeIcon className="h-5 w-5" />} title="Lihat data lengkap" description="Lihat semua data dan riwayat kehadiran peserta." onClick={onViewDetail} />
+        <ActionItem icon={<PencilIcon className="h-5 w-5" />} title="Edit peserta" description="Ubah nama, email, dan data peserta." onClick={onEdit} />
+        <ActionItem icon={<DocumentIcon className="h-5 w-5" />} title="Lihat rekap" description="Lihat ringkasan, kalender, dan riwayat kehadiran." onClick={onViewRecap} />
+        <ActionItem icon={<ShareIcon className="h-5 w-5" />} title="Bagikan rekap absensi" description="Kirim lewat email atau salin tautan rekap peserta ini." onClick={onShare} />
+      </div>
+      <div className="mt-4 border-t border-slate-100 pt-4">
+        <ActionItem icon={<TrashIcon className="h-5 w-5" />} title="Hapus peserta" description="Hapus peserta beserta seluruh riwayat absensinya." onClick={onDelete} danger />
       </div>
     </ModalShell>
   );
