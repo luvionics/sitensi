@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -200,7 +200,7 @@ function TrashIcon({ className = "h-5 w-5" }: { className?: string }) {
   );
 }
 
-export default function BukuAbsensiPage() {
+function BukuAbsensiContent() {
   const supabase = useMemo(() => createClient(), []);
   const { id: bookId } = useParams<{ id: string }>();
 
@@ -295,6 +295,7 @@ export default function BukuAbsensiPage() {
   }, [supabase, bookId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadAll();
   }, [loadAll]);
 
@@ -1358,5 +1359,17 @@ export default function BukuAbsensiPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function BukuAbsensiPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-50" aria-label="Memuat buku" />
+      }
+    >
+      <BukuAbsensiContent />
+    </Suspense>
   );
 }

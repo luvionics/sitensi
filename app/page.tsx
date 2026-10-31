@@ -164,6 +164,7 @@ export default function Home() {
   }, [supabase]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
   }, [loadData]);
 
@@ -400,6 +401,7 @@ export default function Home() {
         const item = drag;
         setDrag(null);
         setDropTarget(null);
+        // eslint-disable-next-line react-hooks/refs
         moveItem(item, targetId);
       },
     };

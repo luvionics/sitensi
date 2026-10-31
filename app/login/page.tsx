@@ -33,13 +33,15 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() =>
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("error")
+      ? "Login dengan Google gagal. Coba lagi."
+      : null
+  );
 
   // Jika sudah login, langsung ke beranda. Tampilkan galat dari callback Google.
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("error")) {
-      setError("Login dengan Google gagal. Coba lagi.");
-    }
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) router.replace("/");
     });
