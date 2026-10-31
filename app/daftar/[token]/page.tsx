@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type FormDef = { book_name: string; fields: { key: string; label: string }[] };
 type State = "loading" | "closed" | "form" | "done";
 
-export default function DaftarPage() {
+function DaftarContent() {
   const supabase = useMemo(() => createClient(), []);
   const { token } = useParams<{ token: string }>();
 
@@ -97,5 +97,17 @@ export default function DaftarPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function DaftarPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-50" aria-label="Memuat formulir" />
+      }
+    >
+      <DaftarContent />
+    </Suspense>
   );
 }
