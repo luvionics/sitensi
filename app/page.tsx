@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Header from "./components/Header";
+import FloatingFooter from "./components/FloatingFooter";
 
 type Folder = { id: string; name: string; parentId: string | null };
 type Book = { id: string; name: string; folderId: string | null; createdAt: string };
@@ -1073,6 +1074,9 @@ export default function Home() {
           )}
         </div>
       )}
+
+      {/* Floating Footer */}
+      <FloatingFooter />
     </div>
   );
 }
