@@ -3,8 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import SharedRecap from "./SharedRecap";
 
 export const metadata: Metadata = { robots: { index: false, follow: false } };
-export const instant = false;
-
 type Recap = {
   book_name: string;
   scope: "book" | "participant";
