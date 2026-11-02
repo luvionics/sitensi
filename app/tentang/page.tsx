@@ -600,7 +600,7 @@ export default function TentangPage() {
           </Link>
 
           <p className="text-center text-xs text-slate-400">
-            © {new Date().getFullYear()} Sitensi. Absensi Mudah & Cepat.
+            © 2026 Sitensi. Absensi Mudah & Cepat.
           </p>
 
           <Link

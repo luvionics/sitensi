@@ -52,7 +52,7 @@ export async function POST(request: Request) {
   if (bookError || !book) return NextResponse.json({ error: "Buku tidak ditemukan atau bukan milik Anda." }, { status: 403 });
 
   if (participantId) {
-    const { data: participant } = await supabase.from("participants").select("id").eq("id", participantId).eq("book_id", bookId).single();
+    const { data: participant } = await supabase.from("book_participants").select("participant_id").eq("participant_id", participantId).eq("book_id", bookId).single();
     if (!participant) return NextResponse.json({ error: "Peserta tidak ditemukan atau bukan milik Anda." }, { status: 403 });
   }
 
