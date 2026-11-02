@@ -4,6 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Header from "./components/Header";
+import ForAnon from "./components/ForAnon";
+import ForEmpty from "./components/ForEmpty";
+import InfoButton from "./components/InfoButton";
+import InfoModal from "./components/InfoModal";
 
 type Folder = { id: string; name: string; parentId: string | null };
 type Book = { id: string; name: string; folderId: string | null; createdAt: string };
@@ -19,25 +23,31 @@ const ROOT = "__root__";
 // Lama spinner tampil sebelum folder dibuka (navigasi folder terjadi di sisi klien)
 const FOLDER_SPIN_MS = 300;
 
+// Animasi muncul membesar (pg-pop) dipakai kartu, menu, dan dialog di layar lebar
 const PAGE_CSS = `
 .pg-fade{animation:pg-fade .2s ease-out both}
 @keyframes pg-fade{from{opacity:0}to{opacity:1}}
+.pg-pop{animation:pg-pop .3s cubic-bezier(.2,.9,.3,1.2) backwards}
+@keyframes pg-pop{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
 .pg-sheet{animation:pg-up .3s cubic-bezier(.2,.8,.2,1) both}
 @keyframes pg-up{from{transform:translateY(100%)}to{transform:none}}
-@keyframes pg-pop{from{opacity:0;transform:scale(.95) translateY(8px)}to{opacity:1;transform:none}}
-@media (min-width:640px){.pg-sheet{animation-name:pg-pop;animation-duration:.22s}}
-.pg-card{animation:pg-card .3s ease-out both}
-@keyframes pg-card{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (min-width:640px){.pg-sheet{animation:pg-pop .3s cubic-bezier(.2,.9,.3,1.2) both}}
 .pg-toast{animation:pg-toast .25s ease-out both}
 @keyframes pg-toast{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
-@media (prefers-reduced-motion: reduce){.pg-fade,.pg-sheet,.pg-card,.pg-toast{animation:none}}
+@media (prefers-reduced-motion: reduce){.pg-fade,.pg-pop,.pg-sheet,.pg-toast{animation:none}}
 `;
 
 // Kelas bersama untuk semua modal: bottom sheet di mobile, di tengah pada layar sm ke atas
 const OVERLAY_CLASS =
-  "pg-fade fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 backdrop-blur-[2px] sm:items-center sm:p-4";
+  "pg-fade fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 sm:items-center sm:p-4";
 const SHEET_CLASS =
-  "pg-sheet w-full max-w-md rounded-t-3xl bg-white px-5 pt-3 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] shadow-2xl sm:rounded-3xl sm:p-6";
+  "pg-sheet w-full max-w-md rounded-t-[2rem] bg-white px-6 pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] shadow-2xl sm:max-w-lg sm:rounded-[2rem] sm:p-7";
+
+// Kelas tombol bersama
+const BTN_CANCEL =
+  "flex-1 cursor-pointer rounded-full border border-slate-200 bg-white py-3.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60";
+const BTN_PRIMARY =
+  "flex-1 cursor-pointer rounded-full bg-gradient-to-r from-blue-500 to-blue-700 py-3.5 text-sm font-semibold text-white shadow-md shadow-blue-600/25 hover:from-blue-600 hover:to-blue-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none";
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
@@ -54,6 +64,10 @@ const toFolder = (r: FolderRow): Folder => ({
   name: r.name,
   parentId: r.parent_id,
 });
+
+// Id pengguna bila benar-benar login; null untuk tamu (tanpa sesi atau sesi anonim)
+const uidOf = (user: { id: string; is_anonymous?: boolean } | null | undefined) =>
+  user && !user.is_anonymous ? user.id : null;
 
 function FolderIcon({ className = "h-6 w-6" }: { className?: string }) {
   return (
@@ -75,7 +89,7 @@ function BookIcon({ className = "h-6 w-6" }: { className?: string }) {
 
 function ChevronLeft({ className = "h-4 w-4" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
       <path d="m15 18-6-6 6-6" />
     </svg>
   );
@@ -83,7 +97,7 @@ function ChevronLeft({ className = "h-4 w-4" }: { className?: string }) {
 
 function ChevronRight({ className = "h-4 w-4" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
       <path d="m9 18 6-6-6-6" />
     </svg>
   );
@@ -148,7 +162,7 @@ function Spinner({ className = "h-6 w-6" }: { className?: string }) {
 }
 
 function SheetHandle() {
-  return <div aria-hidden="true" className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-slate-200 sm:hidden" />;
+  return <div aria-hidden="true" className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-slate-200 sm:hidden" />;
 }
 
 export default function Home() {
@@ -160,11 +174,19 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [guest, setGuest] = useState(false);
+  // Id pengguna yang login. undefined = belum diketahui, null = tamu (belum login / baru logout)
+  const [authUid, setAuthUid] = useState<string | null | undefined>(undefined);
+  // True hanya untuk akun yang benar-benar login (bukan tamu)
+  const loggedIn = !!authUid;
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalType>(null);
   const [name, setName] = useState("");
   const [query, setQuery] = useState("");
+
+  // Modal informasi
+  const [infoOpen, setInfoOpen] = useState(false);
+  const openInfo = useCallback(() => setInfoOpen(true), []);
+  const closeInfo = useCallback(() => setInfoOpen(false), []);
 
   // Respon visual (spinner) saat folder/buku diklik
   const [pending, setPending] = useState<DragItem | null>(null);
@@ -187,62 +209,129 @@ export default function Home() {
   // Breadcrumb yang bisa di-scroll
   const crumbRef = useRef<HTMLDivElement | null>(null);
 
+  // Pelacak sesi: nilai terakhir yang diketahui (untuk membandingkan) dan nomor muat data
+  const authRef = useRef<string | null | undefined>(undefined);
+  const prevUidRef = useRef<string | null | undefined>(undefined);
+  const loadSeq = useRef(0);
+
   const folderMap = useMemo(() => new Map(folders.map((f) => [f.id, f])), [folders]);
   const currentFolder = currentFolderId ? folderMap.get(currentFolderId) ?? null : null;
   const q = query.trim().toLowerCase();
 
-  // Muat folder dan buku milik pengguna saat ini (akun biasa atau tamu)
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  // Muat folder dan buku milik pengguna yang login
+  const loadData = useCallback(
+    async (uid: string) => {
+      const seq = ++loadSeq.current;
+      setLoading(true);
+      setError(null);
+
+      const [foldersRes, booksRes] = await Promise.all([
+        supabase
+          .from("folders")
+          .select("id, name, parent_id")
+          .eq("user_id", uid)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("books")
+          .select("id, name, folder_id, created_at")
+          .eq("user_id", uid)
+          .order("created_at", { ascending: true }),
+      ]);
+
+      // Sesi berubah saat memuat (logout atau ganti akun): buang hasil lama
+      if (seq !== loadSeq.current) return;
+
+      if (foldersRes.error || booksRes.error) {
+        setError(foldersRes.error?.message || booksRes.error?.message || "Gagal memuat data.");
+      } else {
+        setFolders((foldersRes.data ?? []).map(toFolder));
+        setBooks((booksRes.data ?? []).map(toBook));
+      }
+
+      setLoading(false);
+    },
+    [supabase]
+  );
+
+  // Kosongkan tampilan (saat logout atau ganti akun)
+  const resetView = useCallback(() => {
+    if (folderTimer.current) {
+      clearTimeout(folderTimer.current);
+      folderTimer.current = null;
+    }
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setFolders([]);
+    setBooks([]);
+    setCurrentFolderId(null);
+    setQuery("");
     setError(null);
+    setModal(null);
+    setName("");
+    setMoving(null);
+    setCardMenu(null);
+    setDeleting(null);
+    setDeleteBusy(false);
+    setPending(null);
+    setDrag(null);
+    setDropTarget(null);
+    setToast(null);
+  }, []);
 
-    const { data: userData } = await supabase.auth.getUser();
-    let user = userData.user;
+  // Pantau sesi: kenali pengguna yang baru login atau baru logout
+  useEffect(() => {
+    let active = true;
 
-    // Belum login: coba buat sesi tamu secara diam-diam
-    if (!user) {
-      const { data } = await supabase.auth.signInAnonymously();
-      user = data?.user ?? null;
+    const applyAuth = (uid: string | null) => {
+      if (!active || authRef.current === uid) return;
+      authRef.current = uid;
+      // Tampilkan skeleton langsung agar tidak sempat muncul layar kosong
+      if (uid) setLoading(true);
+      setAuthUid(uid);
+    };
+
+    // Keadaan awal diperiksa ke server sekali
+    supabase.auth.getUser().then(({ data }) => {
+      if (authRef.current === undefined) applyAuth(uidOf(data.user));
+    });
+
+    // Perubahan berikutnya: login, logout, atau ganti akun (termasuk dari tab lain)
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "INITIAL_SESSION") return;
+      applyAuth(uidOf(session?.user));
+    });
+
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  // Tanggapi perubahan pengguna
+  useEffect(() => {
+    if (authUid === undefined) return;
+
+    const prev = prevUidRef.current;
+    prevUidRef.current = authUid;
+
+    // Bukan muatan pertama: bersihkan data pengguna sebelumnya
+    if (prev !== undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      resetView();
     }
 
-    // Tidak ada identitas sama sekali: tampilkan kosong tanpa pesan galat
-    if (!user) {
-      setGuest(true);
-      setFolders([]);
-      setBooks([]);
+    if (authUid === null) {
+      // Tamu: batalkan muat data yang masih berjalan
+      loadSeq.current++;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
+      if (prev) showToast("Anda telah keluar");
       return;
     }
 
-    setGuest(false);
-
-    const [foldersRes, booksRes] = await Promise.all([
-      supabase
-        .from("folders")
-        .select("id, name, parent_id")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("books")
-        .select("id, name, folder_id, created_at")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: true }),
-    ]);
-
-    if (foldersRes.error || booksRes.error) {
-      setError(foldersRes.error?.message || booksRes.error?.message || "Gagal memuat data.");
-    } else {
-      setFolders((foldersRes.data ?? []).map(toFolder));
-      setBooks((booksRes.data ?? []).map(toBook));
-    }
-
-    setLoading(false);
-  }, [supabase]);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadData();
-  }, [loadData]);
+    loadData(authUid);
+    if (prev === null) showToast("Berhasil masuk");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authUid, loadData, resetView]);
 
   useEffect(() => {
     return () => {
@@ -587,8 +676,8 @@ export default function Home() {
   }, [anyDialog]);
 
   function openModal(type: ModalType) {
-    // Tamu tanpa identitas tidak bisa menyimpan data: arahkan ke login
-    if (guest) {
+    // Belum login tidak bisa menyimpan data: arahkan ke login
+    if (!loggedIn) {
       router.push("/login");
       return;
     }
@@ -644,6 +733,9 @@ export default function Home() {
   const path = pathTo(currentFolderId);
   const atRoot = !currentFolder;
 
+  // Navigasi dan pencarian tampil saat memuat atau sudah login
+  const showBrowse = loading || loggedIn;
+
   // Daftar folder di dialog pemindah
   const pickerFolder = pickerId ? folderMap.get(pickerId) ?? null : null;
   const pickerFolders = moving
@@ -669,7 +761,7 @@ export default function Home() {
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label={`Opsi untuk ${itemName(item)}`}
-          className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-default disabled:hover:bg-transparent"
+          className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-slate-400 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-default disabled:hover:bg-transparent"
         >
           <MoreIcon />
         </button>
@@ -677,24 +769,28 @@ export default function Home() {
         {open && (
           <div
             role="menu"
-            className="pg-fade absolute right-0 top-full z-30 mt-1 w-48 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl"
+            className="pg-pop absolute right-0 top-full z-30 mt-1 w-56 origin-top-right overflow-hidden rounded-3xl border border-slate-200 bg-white p-2 shadow-2xl"
           >
             <button
               type="button"
               role="menuitem"
               onClick={() => openMove(item)}
-              className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus-visible:bg-blue-50"
+              className="group flex w-full cursor-pointer items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus-visible:bg-blue-50"
             >
-              <MoveIcon className="h-5 w-5 text-blue-600" />
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md shadow-blue-600/20">
+                <MoveIcon className="h-[18px] w-[18px]" />
+              </span>
               Pindahkan
             </button>
             <button
               type="button"
               role="menuitem"
               onClick={() => openDelete(item)}
-              className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-red-600 hover:bg-red-50 focus:outline-none focus-visible:bg-red-50"
+              className="group flex w-full cursor-pointer items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-semibold text-red-600 hover:bg-red-50 focus:outline-none focus-visible:bg-red-50"
             >
-              <TrashIcon className="h-5 w-5" />
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600 ring-1 ring-red-100 group-hover:bg-red-100">
+                <TrashIcon className="h-[18px] w-[18px]" />
+              </span>
               Hapus
             </button>
           </div>
@@ -703,94 +799,98 @@ export default function Home() {
     );
   }
 
-  const sectionLabel = "mb-2 flex items-center gap-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400";
-  const countBadge = "rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500";
+  const sectionLabel =
+    "mb-3 flex items-center gap-2 px-1 text-xs font-semibold uppercase tracking-wider text-slate-500";
+  const countBadge =
+    "rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700 ring-1 ring-blue-100";
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="min-h-dvh overflow-x-clip bg-slate-50 text-slate-900">
       <style>{PAGE_CSS}</style>
 
       {/* inFolder=false: folder baru boleh dibuat di dalam folder (subfolder) */}
       <Header inFolder={false} onNew={openModal} />
 
-      <main className="mx-auto max-w-5xl px-4 pb-12 pt-2 sm:px-6 sm:pt-4">
-        {/* Navigasi folder: selalu tampil. Di root, tombol kembali beku. */}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={goBack}
-            disabled={atRoot}
-            aria-label="Kembali ke folder sebelumnya"
-            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border shadow-sm transition-colors focus:outline-none ${
-              atRoot
-                ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-300 shadow-none"
-                : "cursor-pointer border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500"
-            }`}
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-
-          <nav
-            aria-label="Lokasi folder"
-            className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white shadow-sm"
-          >
-            <div
-              ref={crumbRef}
-              onWheel={(e) => {
-                if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-                  e.currentTarget.scrollLeft += e.deltaY;
-                }
-              }}
-              className="flex h-11 flex-nowrap items-center gap-1 overflow-x-auto whitespace-nowrap px-2 text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      <main className="mx-auto max-w-5xl px-4 pb-24 pt-2 sm:px-6 sm:pt-4">
+        {/* Navigasi folder: tampil saat memuat atau sudah login. Di root, tombol kembali beku. */}
+        {showBrowse && (
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={goBack}
+              disabled={atRoot}
+              aria-label="Kembali ke folder sebelumnya"
+              className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition-colors focus:outline-none ${
+                atRoot
+                  ? "cursor-not-allowed bg-slate-100 text-slate-300"
+                  : "cursor-pointer bg-white text-blue-700 shadow-md shadow-slate-900/10 ring-1 ring-blue-100 hover:bg-blue-50 hover:text-blue-800 focus-visible:ring-2 focus-visible:ring-blue-500 active:scale-90"
+              }`}
             >
-              {atRoot ? (
-                <span className="shrink-0 px-2.5 py-1 font-semibold text-slate-800">
-                  Semua buku
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={goRoot}
-                  {...dropProps(null)}
-                  className={`shrink-0 cursor-pointer rounded-full px-2.5 py-1 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                    dropTarget === ROOT
-                      ? "bg-blue-100 text-blue-700 ring-2 ring-blue-300"
-                      : "text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-                  }`}
-                >
-                  Semua buku
-                </button>
-              )}
+              <ChevronLeft className="h-5 w-5" />
+            </button>
 
-              {path.map((f, i) => {
-                const last = i === path.length - 1;
-                return (
-                  <span key={f.id} className="flex shrink-0 items-center gap-1">
-                    <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
-                    {last ? (
-                      <span className="shrink-0 px-2.5 py-1 font-semibold text-slate-800">
-                        {f.name}
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => openFolder(f.id)}
-                        {...dropProps(f.id)}
-                        className={`shrink-0 cursor-pointer rounded-full px-2.5 py-1 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                          dropTarget === f.id
-                            ? "bg-blue-100 text-blue-700 ring-2 ring-blue-300"
-                            : "text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-                        }`}
-                      >
-                        {f.name}
-                      </button>
-                    )}
+            <nav
+              aria-label="Lokasi folder"
+              className="min-w-0 flex-1 rounded-full border border-slate-200 bg-white shadow-sm"
+            >
+              <div
+                ref={crumbRef}
+                onWheel={(e) => {
+                  if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                    e.currentTarget.scrollLeft += e.deltaY;
+                  }
+                }}
+                className="flex h-12 flex-nowrap items-center gap-1 overflow-x-auto whitespace-nowrap px-3 text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
+                {atRoot ? (
+                  <span className="shrink-0 px-2.5 py-1 font-bold text-blue-900">
+                    Semua buku
                   </span>
-                );
-              })}
-            </div>
-          </nav>
-        </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={goRoot}
+                    {...dropProps(null)}
+                    className={`shrink-0 cursor-pointer rounded-full px-3 py-1.5 font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                      dropTarget === ROOT
+                        ? "bg-blue-100 text-blue-700 ring-2 ring-blue-300"
+                        : "text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                    }`}
+                  >
+                    Semua buku
+                  </button>
+                )}
+
+                {path.map((f, i) => {
+                  const last = i === path.length - 1;
+                  return (
+                    <span key={f.id} className="flex shrink-0 items-center gap-1">
+                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
+                      {last ? (
+                        <span className="shrink-0 px-2.5 py-1 font-bold text-blue-900">
+                          {f.name}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => openFolder(f.id)}
+                          {...dropProps(f.id)}
+                          className={`shrink-0 cursor-pointer rounded-full px-3 py-1.5 font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                            dropTarget === f.id
+                              ? "bg-blue-100 text-blue-700 ring-2 ring-blue-300"
+                              : "text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                          }`}
+                        >
+                          {f.name}
+                        </button>
+                      )}
+                    </span>
+                  );
+                })}
+              </div>
+            </nav>
+          </div>
+        )}
 
         {/* Pesan galat */}
         {error && (
@@ -801,7 +901,7 @@ export default function Home() {
             <span>{error}</span>
             <button
               onClick={() => setError(null)}
-              className="shrink-0 cursor-pointer font-medium hover:underline"
+              className="shrink-0 cursor-pointer font-semibold hover:underline"
             >
               Tutup
             </button>
@@ -809,46 +909,51 @@ export default function Home() {
         )}
 
         {/* Pencarian */}
-        <div className="relative mt-4">
-          <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={currentFolder ? "Cari buku atau folder di sini" : "Cari buku atau folder"}
-            className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-12 pr-11 text-sm shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 [&::-webkit-search-cancel-button]:hidden"
-          />
-          {query && (
-            <button
-              type="button"
-              onClick={() => setQuery("")}
-              aria-label="Hapus pencarian"
-              className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-            >
-              <CloseIcon />
-            </button>
-          )}
-        </div>
+        {showBrowse && (
+          <div className="relative mt-4">
+            <SearchIcon className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-blue-500" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={currentFolder ? "Cari buku atau folder di sini" : "Cari buku atau folder"}
+              className="h-12 w-full rounded-full border border-slate-200 bg-white pl-12 pr-12 text-sm shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 [&::-webkit-search-cancel-button]:hidden"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="Hapus pencarian"
+                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-slate-400 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                <CloseIcon />
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Memuat */}
         {loading && (
-          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
-                className="h-[88px] animate-pulse rounded-3xl border border-slate-200 bg-white"
+                className="h-[104px] animate-pulse rounded-3xl border border-blue-100 bg-blue-50/60"
               />
             ))}
           </div>
         )}
 
+        {/* Belum login: pemberitahuan dan arahan masuk */}
+        {!loading && !loggedIn && <ForAnon />}
+
         {/* Folder */}
-        {!loading && visibleFolders.length > 0 && (
-          <section className="mt-6" aria-label="Folder">
+        {!loading && loggedIn && visibleFolders.length > 0 && (
+          <section className="mt-8" aria-label="Folder">
             <h2 className={sectionLabel}>
               Folder <span className={countBadge}>{visibleFolders.length}</span>
             </h2>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {visibleFolders.map((folder, i) => {
                 const item: DragItem = { type: "folder", id: folder.id };
                 const isTarget = dropTarget === folder.id;
@@ -872,21 +977,23 @@ export default function Home() {
                         handleFolderClick(folder.id);
                       }
                     }}
-                    style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}
-                    className={`pg-card group flex cursor-pointer items-center gap-4 rounded-3xl border p-4 text-left shadow-sm transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                    style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
+                    className={`pg-pop group flex cursor-pointer items-center gap-4 rounded-3xl border p-4 text-left shadow-sm transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:p-5 ${
                       isTarget
                         ? "border-blue-500 bg-blue-50 ring-2 ring-blue-200"
                         : isPending
-                        ? "border-amber-300 bg-white"
-                        : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md"
+                        ? "border-blue-300 bg-white"
+                        : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md"
                     } ${isDragging ? "opacity-40" : ""}`}
                   >
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-amber-100 bg-amber-50 text-amber-600 transition-colors group-hover:bg-amber-100">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-md shadow-blue-600/20">
                       {isPending ? <Spinner /> : <FolderIcon />}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold text-slate-800">{folder.name}</p>
-                      <p className="truncate text-xs text-slate-500">
+                      <p className="truncate text-base font-semibold text-slate-900 group-hover:text-blue-700">
+                        {folder.name}
+                      </p>
+                      <p className="mt-0.5 truncate text-sm text-slate-500">
                         {isPending ? "Membuka..." : "Folder"}
                       </p>
                     </div>
@@ -899,12 +1006,12 @@ export default function Home() {
         )}
 
         {/* Buku */}
-        {!loading && visibleBooks.length > 0 && (
-          <section className="mt-6" aria-label="Buku absensi">
+        {!loading && loggedIn && visibleBooks.length > 0 && (
+          <section className="mt-8" aria-label="Buku absensi">
             <h2 className={sectionLabel}>
               Buku absensi <span className={countBadge}>{visibleBooks.length}</span>
             </h2>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {visibleBooks.map((book, i) => {
                 const item: DragItem = { type: "book", id: book.id };
                 const isDragging = drag?.type === "book" && drag.id === book.id;
@@ -926,19 +1033,21 @@ export default function Home() {
                         openBook(book.id);
                       }
                     }}
-                    style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}
-                    className={`pg-card group flex cursor-pointer items-center gap-4 rounded-3xl border bg-white p-4 text-left shadow-sm transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                    style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
+                    className={`pg-pop group flex cursor-pointer items-center gap-4 rounded-3xl border bg-white p-4 text-left shadow-sm transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:p-5 ${
                       isPending
                         ? "border-blue-300"
                         : "border-slate-200 hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md"
                     } ${isDragging ? "opacity-40" : ""}`}
                   >
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md shadow-blue-600/20">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md shadow-blue-600/20">
                       {isPending ? <Spinner /> : <BookIcon />}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold text-slate-800">{book.name}</p>
-                      <p className="truncate text-xs text-slate-500">
+                      <p className="truncate text-base font-semibold text-slate-900 group-hover:text-blue-700">
+                        {book.name}
+                      </p>
+                      <p className="mt-0.5 truncate text-sm text-slate-500">
                         {isPending ? "Membuka..." : `Dibuat ${book.createdAt}`}
                       </p>
                     </div>
@@ -950,25 +1059,30 @@ export default function Home() {
           </section>
         )}
 
-        {/* Tampilan kosong */}
-        {!loading && isEmpty && (
-          <div className="mt-8 rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-lg shadow-blue-600/20">
-              {q ? <SearchIcon className="h-7 w-7" /> : <BookIcon className="h-8 w-8" />}
+        {/* Sudah login tetapi tidak ada file/folder */}
+        {!loading && loggedIn && isEmpty && (
+          q ? (
+            <div className="pg-pop mt-8 rounded-3xl border border-dashed border-blue-200 bg-white px-6 py-14 text-center">
+              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-lg shadow-blue-600/25">
+                <SearchIcon className="h-9 w-9" />
+              </div>
+              <h2 className="mt-5 text-lg font-bold text-slate-900">Tidak ada hasil</h2>
+              <p className="mx-auto mt-1.5 max-w-sm text-sm text-slate-500">Coba kata kunci lain.</p>
             </div>
-            <h2 className="mt-4 text-base font-semibold">
-              {q ? "Tidak ada hasil" : currentFolder ? "Folder ini kosong" : "Belum ada buku absensi"}
-            </h2>
-            <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">
-              {q
-                ? "Coba kata kunci lain."
-                : currentFolder
-                ? "Buat buku atau folder baru lewat tombol Baru."
-                : "Buat buku absensi pertama untuk mulai mencatat kehadiran."}
-            </p>
-          </div>
+          ) : (
+            <ForEmpty
+              inFolder={!!currentFolder}
+              folderName={currentFolder?.name}
+              onNewBook={() => openModal("book")}
+              onNewFolder={() => openModal("folder")}
+            />
+          )
         )}
       </main>
+
+      {/* Tombol informasi + modal informasi */}
+      <InfoButton onClick={openInfo} />
+      <InfoModal open={infoOpen} onClose={closeInfo} />
 
       {/* Dialog buat baru (bottom sheet di mobile) */}
       {modal && (
@@ -983,18 +1097,16 @@ export default function Home() {
           >
             <SheetHandle />
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-4">
               <span
-                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
-                  modal === "folder"
-                    ? "border border-amber-100 bg-amber-50 text-amber-600"
-                    : "bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md shadow-blue-600/20"
+                className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-md shadow-blue-600/20 ${
+                  modal === "folder" ? "from-sky-500 to-blue-600" : "from-blue-500 to-blue-700"
                 }`}
               >
                 {modal === "folder" ? <FolderIcon /> : <BookIcon />}
               </span>
               <div className="min-w-0">
-                <h2 id="modal-title" className="text-lg font-semibold leading-tight">
+                <h2 id="modal-title" className="text-xl font-bold leading-tight text-slate-900">
                   {modal === "folder" ? "Folder baru" : "Buku absensi baru"}
                 </h2>
                 <p className="mt-0.5 text-sm text-slate-500">
@@ -1009,7 +1121,7 @@ export default function Home() {
               </div>
             </div>
 
-            <label htmlFor="name" className="mt-5 block text-sm font-medium text-slate-700">
+            <label htmlFor="name" className="mt-6 block text-sm font-semibold text-slate-700">
               Nama
             </label>
             <input
@@ -1018,22 +1130,14 @@ export default function Home() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={modal === "folder" ? "Contoh: Kelas XII" : "Contoh: Matematika X-A"}
-              className="mt-1.5 w-full rounded-2xl border border-slate-200 px-4 py-3 text-base placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 sm:text-sm"
+              className="mt-1.5 w-full rounded-2xl border border-slate-200 px-4 py-3.5 text-base placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 sm:text-sm"
             />
 
-            <div className="mt-6 flex gap-2">
-              <button
-                type="button"
-                onClick={closeModal}
-                className="flex-1 cursor-pointer rounded-2xl border border-slate-200 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:scale-[0.98]"
-              >
+            <div className="mt-7 flex gap-3">
+              <button type="button" onClick={closeModal} className={BTN_CANCEL}>
                 Batal
               </button>
-              <button
-                type="submit"
-                disabled={!name.trim() || saving}
-                className="flex-1 cursor-pointer rounded-2xl bg-blue-600 py-3 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-blue-300"
-              >
+              <button type="submit" disabled={!name.trim() || saving} className={BTN_PRIMARY}>
                 {saving ? "Menyimpan..." : "Simpan"}
               </button>
             </div>
@@ -1053,51 +1157,53 @@ export default function Home() {
           >
             <SheetHandle />
 
-            <div className="flex items-center gap-3">
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-blue-100 bg-blue-50 text-blue-600">
+            <div className="flex items-center gap-4">
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md shadow-blue-600/20">
                 <MoveIcon className="h-6 w-6" />
               </span>
               <div className="min-w-0">
-                <h2 id="move-title" className="truncate text-lg font-semibold leading-tight">
+                <h2 id="move-title" className="truncate text-xl font-bold leading-tight text-slate-900">
                   {`Pindahkan "${itemName(moving)}"`}
                 </h2>
                 <p className="mt-0.5 text-sm text-slate-500">Pilih folder tujuan.</p>
               </div>
             </div>
 
-            <div className="mt-4 flex items-center gap-1">
+            <div className="mt-5 flex items-center gap-1">
               {pickerId !== null && (
                 <button
                   type="button"
                   onClick={() => setPickerId(pickerFolder?.parentId ?? null)}
                   aria-label="Naik satu level"
-                  className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full bg-white text-blue-700 ring-1 ring-blue-100 hover:bg-blue-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:scale-90"
                 >
                   <ChevronLeft className="h-5 w-5" />
                 </button>
               )}
-              <p className="truncate px-1 text-sm font-semibold text-slate-800">
+              <p className="truncate px-2 text-sm font-bold text-blue-900">
                 {pickerFolder?.name ?? "Semua buku"}
               </p>
             </div>
 
-            <div className="mt-2 min-h-[8rem] flex-1 overflow-y-auto rounded-2xl border border-slate-200">
+            <div className="mt-2 min-h-[8rem] flex-1 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50">
               {pickerFolders.length === 0 ? (
                 <p className="px-4 py-10 text-center text-sm text-slate-500">
                   Tidak ada folder di sini.
                 </p>
               ) : (
-                <ul className="divide-y divide-slate-100">
+                <ul className="divide-y divide-slate-100 bg-white">
                   {pickerFolders.map((f) => (
                     <li key={f.id}>
                       <button
                         type="button"
                         onClick={() => setPickerId(f.id)}
-                        className="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:bg-slate-50"
+                        className="group flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus-visible:bg-blue-50"
                       >
-                        <FolderIcon className="h-5 w-5 shrink-0 text-amber-500" />
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-md shadow-blue-600/20">
+                          <FolderIcon className="h-[18px] w-[18px]" />
+                        </span>
                         <span className="min-w-0 flex-1 truncate">{f.name}</span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400 group-hover:text-blue-600" />
                       </button>
                     </li>
                   ))}
@@ -1111,19 +1217,15 @@ export default function Home() {
               </p>
             )}
 
-            <div className="mt-5 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setMoving(null)}
-                className="flex-1 cursor-pointer rounded-2xl border border-slate-200 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:scale-[0.98]"
-              >
+            <div className="mt-6 flex gap-3">
+              <button type="button" onClick={() => setMoving(null)} className={BTN_CANCEL}>
                 Batal
               </button>
               <button
                 type="button"
                 onClick={confirmMove}
                 disabled={!canMove(moving, pickerId)}
-                className="flex-1 cursor-pointer rounded-2xl bg-blue-600 py-3 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-blue-300"
+                className={BTN_PRIMARY}
               >
                 Pindahkan ke sini
               </button>
@@ -1151,16 +1253,16 @@ export default function Home() {
           >
             <SheetHandle />
 
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600 ring-1 ring-red-100">
-              <TrashIcon className="h-6 w-6" />
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600 ring-1 ring-red-100">
+              <TrashIcon className="h-7 w-7" />
             </div>
-            <h2 id="delete-title" className="mt-4 text-lg font-semibold">
+            <h2 id="delete-title" className="mt-4 text-xl font-bold text-slate-900">
               {deleting.type === "folder" ? "Hapus folder?" : "Hapus buku?"}
             </h2>
-            <p id="delete-desc" className="mt-1 text-sm text-slate-500">
+            <p id="delete-desc" className="mt-1.5 text-sm text-slate-500">
               {deleting.type === "folder" ? (
                 <>
-                  Folder <span className="font-medium text-slate-700">&quot;{itemName(deleting)}&quot;</span>
+                  Folder <span className="font-semibold text-slate-700">&quot;{itemName(deleting)}&quot;</span>
                   {deleteInfo && (deleteInfo.subfolders > 0 || deleteInfo.bookCount > 0)
                     ? ` beserta isinya (${[
                         deleteInfo.subfolders > 0 ? `${deleteInfo.subfolders} subfolder` : null,
@@ -1172,19 +1274,19 @@ export default function Home() {
                 </>
               ) : (
                 <>
-                  Buku <span className="font-medium text-slate-700">&quot;{itemName(deleting)}&quot;</span> akan
+                  Buku <span className="font-semibold text-slate-700">&quot;{itemName(deleting)}&quot;</span> akan
                   dihapus permanen.
                 </>
               )}{" "}
               Tindakan ini tidak dapat diurungkan.
             </p>
 
-            <div className="mt-6 flex gap-2">
+            <div className="mt-7 flex gap-3">
               <button
                 type="button"
                 onClick={() => setDeleting(null)}
                 disabled={deleteBusy}
-                className="flex-1 cursor-pointer rounded-2xl border border-slate-200 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                className={BTN_CANCEL}
               >
                 Batal
               </button>
@@ -1192,7 +1294,7 @@ export default function Home() {
                 type="button"
                 onClick={confirmDelete}
                 disabled={deleteBusy}
-                className="flex-1 cursor-pointer rounded-2xl bg-red-600 py-3 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-red-300"
+                className="flex-1 cursor-pointer rounded-full bg-red-600 py-3.5 text-sm font-semibold text-white shadow-md shadow-red-600/25 hover:bg-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-red-300 disabled:shadow-none"
               >
                 {deleteBusy ? "Menghapus..." : "Hapus"}
               </button>
@@ -1205,7 +1307,7 @@ export default function Home() {
       {toast && (
         <div
           role="status"
-          className="pg-toast fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom,0px))] z-[60] mx-auto flex max-w-md items-center justify-between gap-3 rounded-2xl bg-slate-900 px-4 py-3 text-sm text-white shadow-xl"
+          className="pg-toast fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom,0px))] z-[60] mx-auto flex max-w-md items-center justify-between gap-3 rounded-full bg-slate-900 py-2.5 pl-5 pr-3 text-sm font-medium text-white shadow-2xl"
         >
           <span className="min-w-0 truncate">{toast.message}</span>
           {toast.undo && (
@@ -1216,7 +1318,7 @@ export default function Home() {
                 hideToast();
                 undo?.();
               }}
-              className="shrink-0 cursor-pointer rounded-lg px-2 py-1 font-semibold text-blue-300 hover:bg-white/10 hover:text-blue-200 focus:outline-none focus-visible:underline"
+              className="shrink-0 cursor-pointer rounded-full bg-white/10 px-3.5 py-1.5 font-semibold text-sky-300 hover:bg-white/20 hover:text-sky-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
             >
               Urungkan
             </button>

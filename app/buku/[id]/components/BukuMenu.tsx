@@ -23,7 +23,7 @@ function Svg({ className, children, w = 2 }: IconProps & { children: React.React
 }
 
 const ChevronRight = ({ className = "h-4 w-4" }: IconProps) => (
-  <Svg className={className}><path d="m9 18 6-6-6-6" /></Svg>
+  <Svg className={className} w={2.2}><path d="m9 18 6-6-6-6" /></Svg>
 );
 const UserPlusIcon = ({ className = "h-5 w-5" }: IconProps) => (
   <Svg className={className}>
@@ -54,31 +54,6 @@ const BookIcon = ({ className = "h-5 w-5" }: IconProps) => (
   </Svg>
 );
 
-type Tone = "blue" | "emerald" | "amber" | "violet";
-
-const TONES: Record<Tone, { icon: string; hover: string; text: string }> = {
-  blue: {
-    icon: "bg-blue-50 text-blue-600 border-blue-100",
-    hover: "hover:border-blue-200 hover:bg-blue-50/60",
-    text: "group-hover:text-blue-700",
-  },
-  emerald: {
-    icon: "bg-emerald-50 text-emerald-700 border-emerald-100",
-    hover: "hover:border-emerald-200 hover:bg-emerald-50/60",
-    text: "group-hover:text-emerald-700",
-  },
-  amber: {
-    icon: "bg-amber-50 text-amber-700 border-amber-100",
-    hover: "hover:border-amber-200 hover:bg-amber-50/60",
-    text: "group-hover:text-amber-700",
-  },
-  violet: {
-    icon: "bg-violet-50 text-violet-700 border-violet-100",
-    hover: "hover:border-violet-200 hover:bg-violet-50/60",
-    text: "group-hover:text-violet-700",
-  },
-};
-
 // Rute halaman kelola peserta (dipakai tombol "Kelola" dan menu modal)
 const pesertaHref = (id: string) => `/buku/${id}/peserta`;
 
@@ -87,21 +62,21 @@ const MENU: {
   label: string;
   description: string;
   icon: (p: IconProps) => React.ReactElement;
-  tone: Tone;
+  gradient: string;
   href: (bookId: string) => string;
 }[] = [
   {
     label: "Kelola peserta",
     description: "Tambah dan atur peserta",
     icon: UserPlusIcon,
-    tone: "blue",
+    gradient: "from-blue-500 to-blue-700",
     href: pesertaHref,
   },
   {
     label: "Rekapitulasi",
     description: "Rekap kehadiran seluruh peserta",
     icon: ChartIcon,
-    tone: "emerald",
+    gradient: "from-sky-500 to-blue-600",
     href: (id) => `/buku/${id}/rekap`,
   },
 ];
@@ -180,13 +155,13 @@ export default function BukuSidebar({ bookId, title, hideTrigger = false, confir
       {!hideTrigger && (
         <div
           style={{ top: "calc(env(safe-area-inset-top, 0px) + 0.75rem)" }}
-          className="bs-pop fixed right-4 z-30 flex items-center gap-1 sm:right-6"
+          className="bs-pop fixed right-4 z-30 flex items-center gap-2 sm:right-6"
         >
           <button
             type="button"
             onClick={() => navigate(pesertaHref(bookId))}
             aria-label="Kelola peserta"
-            className="flex h-10 cursor-pointer items-center gap-2 rounded-full bg-blue-600 px-3.5 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 active:scale-95"
+            className="flex h-11 cursor-pointer items-center gap-2 rounded-full bg-gradient-to-r from-blue-500 to-blue-700 px-4 text-sm font-semibold text-white shadow-md shadow-blue-600/25 hover:from-blue-600 hover:to-blue-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 active:scale-95"
           >
             <UserPlusIcon className="h-[18px] w-[18px]" />
             <span>Kelola</span>
@@ -199,7 +174,7 @@ export default function BukuSidebar({ bookId, title, hideTrigger = false, confir
             aria-label="Buka menu"
             aria-haspopup="dialog"
             aria-expanded={open}
-            className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-transparent text-blue-600 hover:text-blue-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:scale-90"
+            className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-white text-blue-700 shadow-md shadow-slate-900/10 ring-1 ring-blue-100 hover:bg-blue-50 hover:text-blue-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:scale-90"
           >
             <GearIcon className="h-6 w-6" />
           </button>
@@ -215,7 +190,7 @@ export default function BukuSidebar({ bookId, title, hideTrigger = false, confir
       >
         <div
           onClick={close}
-          className={`absolute inset-0 bg-slate-900/40 transition-opacity duration-200 ${
+          className={`absolute inset-0 bg-slate-900/50 transition-opacity duration-200 ${
             open ? "opacity-100" : "opacity-0"
           }`}
         />
@@ -223,37 +198,37 @@ export default function BukuSidebar({ bookId, title, hideTrigger = false, confir
           role="dialog"
           aria-modal="true"
           aria-label="Menu"
-          className={`relative flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl transition-all duration-300 ease-out sm:max-w-md sm:rounded-3xl ${
+          className={`relative flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl transition-all duration-300 ease-out sm:max-w-lg sm:rounded-[2rem] ${
             open
               ? "translate-y-0 sm:scale-100 sm:opacity-100"
               : "translate-y-full sm:translate-y-0 sm:scale-95 sm:opacity-0"
           }`}
         >
           {/* Header */}
-          <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 to-blue-800 px-5 pb-5 pt-3 text-white sm:pt-5">
+          <div className="relative overflow-hidden bg-gradient-to-br from-blue-500 via-blue-700 to-blue-900 px-6 pb-7 pt-3 text-white sm:pt-6">
             <span
               aria-hidden="true"
-              className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-white/10"
+              className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10"
             />
             <span
               aria-hidden="true"
-              className="pointer-events-none absolute -bottom-10 right-10 h-20 w-20 rounded-full bg-white/10"
+              className="pointer-events-none absolute -bottom-14 right-16 h-28 w-28 rounded-full bg-white/10"
             />
 
             {/* Garis pegangan (hanya mobile) */}
             <span
               aria-hidden="true"
-              className="relative mx-auto mb-3 block h-1 w-10 rounded-full bg-white/40 sm:hidden"
+              className="relative mx-auto mb-4 block h-1.5 w-12 rounded-full bg-white/40 sm:hidden"
             />
 
             <div className="relative flex items-start justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-3">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25">
-                  <BookIcon className="h-5 w-5" />
+              <div className="flex min-w-0 items-center gap-4">
+                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/30">
+                  <BookIcon className="h-7 w-7" />
                 </span>
                 <div className="min-w-0">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-blue-100">Menu buku</p>
-                  <h2 className="truncate text-base font-semibold leading-tight">{title || "Buku"}</h2>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-blue-100">Menu buku</p>
+                  <h2 className="mt-0.5 truncate text-xl font-bold leading-tight sm:text-2xl">{title || "Buku"}</h2>
                 </div>
               </div>
               <button
@@ -262,19 +237,18 @@ export default function BukuSidebar({ bookId, title, hideTrigger = false, confir
                 onClick={close}
                 aria-label="Tutup menu"
                 tabIndex={open ? 0 : -1}
-                className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-xl bg-white/15 text-white ring-1 ring-white/25 hover:bg-white/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-white active:scale-95"
+                className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-xl bg-white/15 text-white ring-1 ring-white/30 hover:bg-white/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-white active:scale-95"
               >
-                <CloseIcon className="h-4 w-4" />
+                <CloseIcon className="h-5 w-5" />
               </button>
             </div>
           </div>
 
           {/* Daftar menu */}
-          <nav className="flex-1 overflow-y-auto px-4 py-4" aria-label="Navigasi buku">
-            <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Menu</p>
-            <ul className="space-y-2">
+          <nav className="flex-1 overflow-y-auto bg-slate-50 px-5 py-5" aria-label="Navigasi buku">
+            <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Pilih menu</p>
+            <ul className="space-y-3">
               {MENU.map((m, i) => {
-                const tone = TONES[m.tone];
                 const Icon = m.icon;
                 return (
                   <li key={m.label} className={open ? "bs-item" : ""} style={{ animationDelay: `${80 + i * 50}ms` }}>
@@ -282,20 +256,22 @@ export default function BukuSidebar({ bookId, title, hideTrigger = false, confir
                       type="button"
                       onClick={() => navigate(m.href(bookId))}
                       tabIndex={open ? 0 : -1}
-                      className={`group flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 px-3 py-3 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${tone.hover}`}
+                      className="group flex w-full cursor-pointer items-center gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left shadow-sm transition-all hover:border-blue-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:scale-[0.99]"
                     >
                       <span
-                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${tone.icon}`}
+                        className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${m.gradient} text-white shadow-md shadow-blue-600/20`}
                       >
-                        <Icon className="h-[18px] w-[18px]" />
+                        <Icon className="h-6 w-6" />
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className={`block truncate text-sm font-medium text-slate-800 ${tone.text}`}>
+                        <span className="block truncate text-base font-semibold text-slate-900 group-hover:text-blue-700 sm:text-lg">
                           {m.label}
                         </span>
-                        <span className="block truncate text-xs text-slate-500">{m.description}</span>
+                        <span className="mt-0.5 block truncate text-sm text-slate-500">{m.description}</span>
                       </span>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-500" />
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600 transition-colors group-hover:bg-blue-600 group-hover:text-white">
+                        <ChevronRight className="h-4 w-4" />
+                      </span>
                     </button>
                   </li>
                 );
@@ -305,10 +281,10 @@ export default function BukuSidebar({ bookId, title, hideTrigger = false, confir
 
           {/* Footer */}
           <div
-            className="border-t border-slate-100 px-5 pt-3"
-            style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" }}
+            className="border-t border-slate-200 bg-white px-5 pt-3"
+            style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.875rem)" }}
           >
-            <p className="text-center text-[11px] text-slate-400">Ketuk di luar panel atau tekan Esc untuk menutup</p>
+            <p className="text-center text-xs text-slate-400">Ketuk di luar panel atau tekan Esc untuk menutup</p>
           </div>
         </div>
       </div>

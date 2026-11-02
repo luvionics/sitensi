@@ -3,7 +3,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import BukuSidebar from "./components/BukuSidebar";
+import BukuSidebar from "./components/BukuMenu";
 import PesertaDetailModal from "./components/PesertaDetailModal";
 
 type Status = "hadir" | "izin" | "alpa";
@@ -22,12 +22,6 @@ type BpRow = {
 // (agar klik < > beruntun hanya mengambil tanggal terakhir)
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const FETCH_DELAY_MS = 250;
-
-const STATUSES: { value: Status; label: string; active: string }[] = [
-  { value: "hadir", label: "Hadir", active: "border-emerald-600 bg-emerald-600 text-white" },
-  { value: "izin", label: "Izin", active: "border-amber-500 bg-amber-500 text-white" },
-  { value: "alpa", label: "Alpa", active: "border-red-500 bg-red-500 text-white" },
-];
 
 const WEEKDAYS = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
 
@@ -132,6 +126,64 @@ const CalendarIcon = ({ className = "h-5 w-5" }: IconProps) => (
     <path d="M8 3v4M16 3v4M3 10h18" />
   </Svg>
 );
+const CloseIcon = ({ className = "h-5 w-5" }: IconProps) => (
+  <Svg className={className}><path d="M18 6 6 18M6 6l12 12" /></Svg>
+);
+// Ikon status
+const DocIcon = ({ className = "h-5 w-5" }: IconProps) => (
+  <Svg className={className} w={2.2}>
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+    <path d="M14 3v5h5M9 13h6M9 17h6" />
+  </Svg>
+);
+const XCircleIcon = ({ className = "h-5 w-5" }: IconProps) => (
+  <Svg className={className} w={2.2}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="m9 9 6 6M15 9l-6 6" />
+  </Svg>
+);
+const CheckCircleIcon = ({ className = "h-5 w-5" }: IconProps) => (
+  <Svg className={className} w={2.2}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="m8.5 12.5 2.5 2.5 4.5-5" />
+  </Svg>
+);
+const ClockIcon = ({ className = "h-5 w-5" }: IconProps) => (
+  <Svg className={className} w={2.2}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 2" />
+  </Svg>
+);
+
+// Urutan tombol: Izin, Alpa, Hadir
+// idle = hanya garis luar; active = warna cerah
+const STATUSES: {
+  value: Status;
+  label: string;
+  active: string;
+  Icon: (p: IconProps) => React.ReactElement;
+}[] = [
+  {
+    value: "izin",
+    label: "Izin",
+    Icon: DocIcon,
+    active: "border-amber-400 bg-amber-400 text-amber-950 shadow-md shadow-amber-400/40",
+  },
+  {
+    value: "alpa",
+    label: "Alpa",
+    Icon: XCircleIcon,
+    active: "border-red-500 bg-red-500 text-white shadow-md shadow-red-500/40",
+  },
+  {
+    value: "hadir",
+    label: "Hadir",
+    Icon: CheckCircleIcon,
+    active: "border-emerald-500 bg-emerald-500 text-white shadow-md shadow-emerald-500/40",
+  },
+];
+
+const IDLE_STATUS = "border-slate-300 bg-transparent text-slate-600 hover:border-slate-400 hover:bg-slate-50";
 
 /* ---------- Input catatan izin ---------- */
 function NoteInput({
@@ -149,7 +201,7 @@ function NoteInput({
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
       placeholder="Catatan izin (opsional)"
-      className="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:opacity-60"
+      className="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:opacity-60"
     />
   );
 }
@@ -190,7 +242,7 @@ const PersonRow = memo(function PersonRow({ p, no, rec, changed, locked, onOpen,
         <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
       </button>
 
-      <div className="mt-3 grid grid-cols-3 gap-2">
+      <div className="mt-4 grid grid-cols-3 gap-2.5">
         {STATUSES.map((s) => {
           const active = rec?.status === s.value;
           return (
@@ -200,13 +252,12 @@ const PersonRow = memo(function PersonRow({ p, no, rec, changed, locked, onOpen,
               onClick={() => onStatus(p.id, s.value)}
               disabled={locked}
               aria-pressed={active}
-              className={`h-10 cursor-pointer touch-manipulation select-none rounded-full border text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:scale-95 disabled:cursor-wait disabled:opacity-60 ${
-                active
-                  ? s.active
-                  : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+              className={`flex h-14 cursor-pointer touch-manipulation select-none items-center justify-center gap-1.5 rounded-full border text-base font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:scale-95 disabled:cursor-wait disabled:opacity-60 ${
+                active ? s.active : IDLE_STATUS
               }`}
             >
-              {s.label}
+              <s.Icon className="h-5 w-5 shrink-0" />
+              <span>{s.label}</span>
             </button>
           );
         })}
@@ -237,7 +288,11 @@ export default function BukuPage() {
   const [recs, setRecs] = useState<{ date: string; map: RecMap } | null>(null);
   const [draft, setDraft] = useState<Draft>({});
   const [saving, setSaving] = useState(false);
+
+  // Pencarian: tombol "Cari peserta" di baris total berganti menjadi input
   const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   // Cache absensi per tanggal (hanya di memori halaman ini)
   const cacheRef = useRef<Map<string, CacheEntry>>(new Map());
@@ -512,6 +567,24 @@ export default function BukuPage() {
     [dirtyCount]
   );
 
+  /* ---------- Pencarian (inline di baris total) ---------- */
+  function openSearch() {
+    setSearchOpen(true);
+  }
+
+  // Menutup input sekaligus menghapus kata kunci
+  function closeSearch() {
+    setQuery("");
+    setSearchOpen(false);
+  }
+
+  // Fokuskan input begitu muncul
+  useEffect(() => {
+    if (!searchOpen) return;
+    const id = window.requestAnimationFrame(() => searchRef.current?.focus());
+    return () => window.cancelAnimationFrame(id);
+  }, [searchOpen]);
+
   /* ---------- Kalender ---------- */
   function openPicker() {
     if (saving || !date) return;
@@ -615,10 +688,10 @@ export default function BukuPage() {
   const ready = !loading && !!date;
 
   const summary = [
-    { label: "Hadir", n: counts.hadir, dot: "bg-emerald-500", num: "text-emerald-600" },
-    { label: "Izin", n: counts.izin, dot: "bg-amber-500", num: "text-amber-600" },
-    { label: "Alpa", n: counts.alpa, dot: "bg-red-500", num: "text-red-600" },
-    { label: "Belum diisi", n: counts.belum, dot: "bg-slate-300", num: "text-slate-700" },
+    { label: "Izin", n: counts.izin, Icon: DocIcon, color: "text-amber-500", num: "text-amber-600" },
+    { label: "Alpa", n: counts.alpa, Icon: XCircleIcon, color: "text-red-500", num: "text-red-600" },
+    { label: "Hadir", n: counts.hadir, Icon: CheckCircleIcon, color: "text-emerald-500", num: "text-emerald-600" },
+    { label: "Belum diisi", n: counts.belum, Icon: ClockIcon, color: "text-slate-400", num: "text-slate-600" },
   ];
 
   return (
@@ -632,7 +705,7 @@ export default function BukuPage() {
             type="button"
             onClick={goHome}
             aria-label="Kembali ke beranda"
-            className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 hover:border-blue-300 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <ChevronLeft />
           </button>
@@ -657,15 +730,14 @@ export default function BukuPage() {
 
         {!ready ? (
           <div className="space-y-3">
-            <div className="h-24 animate-pulse rounded-3xl border border-slate-200 bg-white" />
-            <div className="h-20 animate-pulse rounded-3xl border border-slate-200 bg-white" />
-            <div className="h-12 animate-pulse rounded-2xl border border-slate-200 bg-white" />
+            <div className="h-24 animate-pulse rounded-3xl border border-slate-200 bg-slate-50" />
+            <div className="h-11 animate-pulse rounded-2xl border border-slate-200 bg-slate-50" />
             <div className="h-28 animate-pulse rounded-3xl border border-slate-200 bg-white" />
           </div>
         ) : (
           <>
             {/* Kartu tanggal */}
-            <section className="rounded-3xl border border-slate-200 bg-white p-3" aria-label="Tanggal absensi">
+            <section className="rounded-3xl border border-slate-200 bg-slate-50 p-3" aria-label="Tanggal absensi">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -683,7 +755,7 @@ export default function BukuPage() {
                   disabled={saving}
                   aria-label={`Pilih tanggal, saat ini ${formatLong(date)}`}
                   aria-haspopup="dialog"
-                  className="group flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-left transition-colors hover:border-blue-300 hover:bg-blue-50/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="group flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-left transition-colors hover:border-blue-300 hover:bg-blue-50/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {/* Lencana kalender */}
                   <span className="flex h-12 w-12 shrink-0 flex-col items-center justify-center overflow-hidden rounded-xl bg-blue-600 text-white shadow-sm shadow-blue-600/20">
@@ -735,48 +807,88 @@ export default function BukuPage() {
               )}
             </section>
 
-            {/* Kartu total */}
-            <section
-              className="mt-3 rounded-3xl border border-slate-200 bg-white py-3"
-              aria-label="Ringkasan kehadiran"
-            >
-              <ul className="grid grid-cols-4 divide-x divide-slate-100">
+            {/* Total (tipis, ikon SVG) + tombol cari / input cari dalam satu baris */}
+            <div className="mt-3 flex items-center gap-2">
+              <ul
+                aria-label="Ringkasan kehadiran"
+                className={`flex h-11 items-center rounded-2xl border border-slate-200 bg-slate-50 px-3 ${
+                  searchOpen ? "shrink-0 gap-3" : "min-w-0 flex-1 justify-around gap-1"
+                }`}
+              >
                 {summary.map((s) => (
-                  <li key={s.label} className="flex flex-col items-center px-1 text-center">
-                    <span className={`text-xl font-bold leading-none ${s.num}`}>
+                  <li
+                    key={s.label}
+                    title={s.label}
+                    aria-label={`${s.label}: ${recsLoading ? "memuat" : s.n}`}
+                    className="flex items-center gap-1"
+                  >
+                    <s.Icon className={`h-4 w-4 shrink-0 ${s.color}`} />
+                    <span className={`text-sm font-bold leading-none ${s.num}`}>
                       {recsLoading ? "–" : s.n}
                     </span>
-                    <span className="mt-1.5 flex items-center gap-1 text-[11px] text-slate-500">
-                      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${s.dot}`} />
-                      <span className="truncate">{s.label}</span>
-                    </span>
+                    {!searchOpen && (
+                      <span className="hidden text-[11px] text-slate-500 sm:inline">{s.label}</span>
+                    )}
                   </li>
                 ))}
               </ul>
-            </section>
 
-            {/* Pencarian */}
-            <div className="relative mt-4">
-              <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-              <input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Cari peserta"
-                className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-12 pr-4 text-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-              />
+              {searchOpen ? (
+                <div role="search" className="relative min-w-0 flex-1">
+                  <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    ref={searchRef}
+                    type="text"
+                    inputMode="search"
+                    enterKeyHint="search"
+                    autoComplete="off"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        closeSearch();
+                      } else if (e.key === "Enter") {
+                        e.preventDefault();
+                        e.currentTarget.blur();
+                      }
+                    }}
+                    placeholder="Cari peserta"
+                    aria-label="Cari peserta"
+                    className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-9 pr-11 text-base placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  />
+                  <button
+                    type="button"
+                    onClick={closeSearch}
+                    aria-label="Tutup pencarian"
+                    className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-slate-500 hover:bg-slate-200/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  >
+                    <CloseIcon className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={openSearch}
+                  aria-label="Cari peserta"
+                  className="flex h-11 shrink-0 cursor-pointer items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:scale-95"
+                >
+                  <SearchIcon className="h-4 w-4 shrink-0" />
+                  <span>Cari peserta</span>
+                </button>
+              )}
             </div>
 
             {/* Daftar peserta */}
             {participants.length === 0 ? (
-              <div className="mt-4 rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+              <div className="mt-4 rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
                 <h2 className="text-sm font-semibold">Belum ada peserta</h2>
                 <p className="mx-auto mt-1 max-w-xs text-xs text-slate-500">
                   Tambahkan peserta lewat tombol Kelola di kanan atas, lalu mulai catat kehadiran.
                 </p>
               </div>
             ) : visible.length === 0 ? (
-              <div className="mt-4 rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+              <div className="mt-4 rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
                 <h2 className="text-sm font-semibold">Tidak ada hasil</h2>
                 <p className="mt-1 text-xs text-slate-500">Coba kata kunci lain.</p>
               </div>

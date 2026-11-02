@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
@@ -31,13 +31,8 @@ type EmailRow = { id: string; email: string };
 const SHARE_COLS = "id, token, access, date_from, date_to";
 const EMAIL_RE = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
 
-const STATUS_KEYS: Status[] = ["hadir", "izin", "alpa"];
-
-const STATUS_UI: Record<Status, { label: string; badge: string; dot: string }> = {
-  hadir: { label: "Hadir", badge: "bg-emerald-600/15 text-emerald-800", dot: "bg-emerald-500" },
-  izin: { label: "Izin", badge: "bg-amber-600/15 text-amber-800", dot: "bg-amber-500" },
-  alpa: { label: "Alpa", badge: "bg-red-600/15 text-red-800", dot: "bg-red-500" },
-};
+// Urutan: Izin, Alpa, Hadir
+const STATUS_KEYS: Status[] = ["izin", "alpa", "hadir"];
 
 const PAGE_SIZE = 1000;
 
@@ -153,6 +148,58 @@ const LinkIcon = ({ className = "h-4 w-4" }: IconProps) => (
     <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
   </Svg>
 );
+const CalendarIcon = ({ className = "h-5 w-5" }: IconProps) => (
+  <Svg className={className} w={1.8}>
+    <rect x="3" y="5" width="18" height="16" rx="3" />
+    <path d="M8 3v4M16 3v4M3 10h18" />
+  </Svg>
+);
+// Ikon status
+const DocIcon = ({ className = "h-5 w-5" }: IconProps) => (
+  <Svg className={className} w={2.2}>
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+    <path d="M14 3v5h5M9 13h6M9 17h6" />
+  </Svg>
+);
+const XCircleIcon = ({ className = "h-5 w-5" }: IconProps) => (
+  <Svg className={className} w={2.2}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="m9 9 6 6M15 9l-6 6" />
+  </Svg>
+);
+const CheckCircleIcon = ({ className = "h-5 w-5" }: IconProps) => (
+  <Svg className={className} w={2.2}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="m8.5 12.5 2.5 2.5 4.5-5" />
+  </Svg>
+);
+
+const STATUS_UI: Record<
+  Status,
+  { label: string; badge: string; icon: string; num: string; Icon: (p: IconProps) => React.ReactElement }
+> = {
+  izin: {
+    label: "Izin",
+    badge: "bg-amber-600/15 text-amber-800",
+    icon: "text-amber-500",
+    num: "text-amber-600",
+    Icon: DocIcon,
+  },
+  alpa: {
+    label: "Alpa",
+    badge: "bg-red-600/15 text-red-800",
+    icon: "text-red-500",
+    num: "text-red-600",
+    Icon: XCircleIcon,
+  },
+  hadir: {
+    label: "Hadir",
+    badge: "bg-emerald-600/15 text-emerald-800",
+    icon: "text-emerald-500",
+    num: "text-emerald-600",
+    Icon: CheckCircleIcon,
+  },
+};
 
 /* ---------- Skeleton ---------- */
 const PAGE_CSS = `
@@ -168,10 +215,10 @@ function Sk({ className = "" }: { className?: string }) {
 const chipBase =
   "cursor-pointer rounded-full border px-3.5 py-1.5 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60";
 const chipOn = "border-blue-600 bg-blue-600 text-white";
-const chipOff = "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50";
+const chipOff = "border-slate-300 bg-transparent text-slate-600 hover:border-slate-400 hover:bg-slate-100";
 
 const headerBtn =
-  "flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500";
+  "flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 hover:border-blue-300 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500";
 
 const shareBtn =
   "flex h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-2xl bg-blue-600 px-3.5 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-blue-600";
@@ -652,8 +699,12 @@ export default function RekapPage() {
   const [to, setTo] = useState("");
 
   const [data, setData] = useState<{ key: string; rows: AttRow[] } | null>(null);
-  const [query, setQuery] = useState("");
   const [sort, setSort] = useState<Sort>("daftar");
+
+  // Pencarian: tombol "Cari peserta" berganti menjadi input di baris yang sama
+  const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   // Modal detail peserta: cukup memegang id-nya
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -797,6 +848,23 @@ export default function RekapPage() {
 
   const rangeLabel = rangeText(from || null, to || null);
 
+  /* ---------- Pencarian ---------- */
+  function openSearch() {
+    setSearchOpen(true);
+  }
+
+  // Menutup input sekaligus menghapus kata kunci
+  function closeSearch() {
+    setQuery("");
+    setSearchOpen(false);
+  }
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    const id = window.requestAnimationFrame(() => searchRef.current?.focus());
+    return () => window.cancelAnimationFrame(id);
+  }, [searchOpen]);
+
   /* ---------- Render ---------- */
   if (notFound) {
     return (
@@ -813,6 +881,9 @@ export default function RekapPage() {
       </div>
     );
   }
+
+  const dateInputCls =
+    "w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100";
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -867,13 +938,13 @@ export default function RekapPage() {
         {baseLoading ? (
           <div className="space-y-3">
             <div className="rk-sk h-40 rounded-3xl border border-slate-200" />
-            <div className="rk-sk h-12 rounded-2xl border border-slate-200" />
-            <div className="rk-sk h-24 rounded-3xl border border-slate-200" />
+            <div className="rk-sk h-11 rounded-2xl border border-slate-200" />
+            <div className="h-24 animate-pulse rounded-3xl border border-slate-200 bg-white" />
           </div>
         ) : (
           <>
             {/* Filter + ringkasan */}
-            <section className="rounded-3xl border border-slate-200 bg-white p-4">
+            <section className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => applyPreset("all")} className={`${chipBase} ${preset === "all" ? chipOn : chipOff}`}>
                   Semua
@@ -893,21 +964,11 @@ export default function RekapPage() {
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <label className="block">
                     <span className="mb-1 block text-[11px] font-medium text-slate-500">Dari</span>
-                    <input
-                      type="date"
-                      value={from}
-                      onChange={(e) => setFrom(e.target.value)}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                    />
+                    <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={dateInputCls} />
                   </label>
                   <label className="block">
                     <span className="mb-1 block text-[11px] font-medium text-slate-500">Sampai</span>
-                    <input
-                      type="date"
-                      value={to}
-                      onChange={(e) => setTo(e.target.value)}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                    />
+                    <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={dateInputCls} />
                   </label>
                 </div>
               )}
@@ -923,26 +984,44 @@ export default function RekapPage() {
               {dataLoading ? (
                 <div className="mt-3 space-y-2" role="status" aria-live="polite">
                   <span className="sr-only">Memuat rekap</span>
-                  <Sk className="h-14 w-full rounded-2xl" />
+                  <Sk className="h-11 w-full rounded-2xl" />
                   <Sk className="h-2 w-full rounded-full" />
                 </div>
               ) : (
                 <>
-                  <div className="mt-3 grid grid-cols-4 gap-2 text-center">
-                    {STATUS_KEYS.map((s) => (
-                      <div key={s} className={`rounded-2xl px-2 py-2.5 ${STATUS_UI[s].badge}`}>
-                        <p className="text-lg font-bold leading-none">{overall[s]}</p>
-                        <p className="mt-1 text-[11px] font-medium">{STATUS_UI[s].label}</p>
-                      </div>
-                    ))}
-                    <div className="rounded-2xl bg-slate-100 px-2 py-2.5 text-slate-700">
-                      <p className="text-lg font-bold leading-none">{dayCount}</p>
-                      <p className="mt-1 text-[11px] font-medium">Hari</p>
-                    </div>
-                  </div>
+                  {/* Total tipis dengan ikon SVG */}
+                  <ul
+                    aria-label="Ringkasan kehadiran"
+                    className="mt-3 grid h-11 grid-cols-4 items-center divide-x divide-slate-200 rounded-2xl border border-slate-200 bg-slate-50"
+                  >
+                    {STATUS_KEYS.map((s) => {
+                      const ui = STATUS_UI[s];
+                      return (
+                        <li
+                          key={s}
+                          title={ui.label}
+                          aria-label={`${ui.label}: ${overall[s]}`}
+                          className="flex items-center justify-center gap-1.5 px-1"
+                        >
+                          <ui.Icon className={`h-4 w-4 shrink-0 ${ui.icon}`} />
+                          <span className={`text-sm font-bold leading-none ${ui.num}`}>{overall[s]}</span>
+                          <span className="hidden text-[11px] text-slate-500 sm:inline">{ui.label}</span>
+                        </li>
+                      );
+                    })}
+                    <li
+                      title="Hari"
+                      aria-label={`Hari: ${dayCount}`}
+                      className="flex items-center justify-center gap-1.5 px-1"
+                    >
+                      <CalendarIcon className="h-4 w-4 shrink-0 text-slate-400" />
+                      <span className="text-sm font-bold leading-none text-slate-600">{dayCount}</span>
+                      <span className="hidden text-[11px] text-slate-500 sm:inline">Hari</span>
+                    </li>
+                  </ul>
 
                   <div className="mt-3 flex items-center gap-3">
-                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200">
                       <div className="h-full rounded-full bg-emerald-600/70" style={{ width: `${overall.pct}%` }} />
                     </div>
                     <span className="shrink-0 text-xs text-slate-500">
@@ -953,23 +1032,60 @@ export default function RekapPage() {
               )}
             </section>
 
-            {/* Pencarian + urutan */}
-            <div className="mt-4 flex gap-2">
-              <div className="relative flex-1">
-                <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="search"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Cari peserta"
-                  className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-12 pr-4 text-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
+            {/* Tombol cari / input cari + urutan dalam satu baris */}
+            <div className="mt-3 flex items-center gap-2">
+              {searchOpen ? (
+                <div role="search" className="relative min-w-0 flex-1">
+                  <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    ref={searchRef}
+                    type="text"
+                    inputMode="search"
+                    enterKeyHint="search"
+                    autoComplete="off"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        closeSearch();
+                      } else if (e.key === "Enter") {
+                        e.preventDefault();
+                        e.currentTarget.blur();
+                      }
+                    }}
+                    placeholder="Cari peserta"
+                    aria-label="Cari peserta"
+                    className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-9 pr-11 text-base placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  />
+                  <button
+                    type="button"
+                    onClick={closeSearch}
+                    aria-label="Tutup pencarian"
+                    className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-slate-500 hover:bg-slate-200/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  >
+                    <CloseIcon className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={openSearch}
+                  aria-label="Cari peserta"
+                  className="flex h-11 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:scale-[0.98]"
+                >
+                  <SearchIcon className="h-4 w-4 shrink-0" />
+                  <span className="truncate">Cari peserta</span>
+                </button>
+              )}
+
               <select
                 value={sort}
                 onChange={(e) => setSort(e.target.value as Sort)}
                 aria-label="Urutkan"
-                className="cursor-pointer rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                className={`h-11 cursor-pointer rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 ${
+                  searchOpen ? "w-28 shrink-0 sm:w-auto" : "shrink-0"
+                }`}
               >
                 <option value="daftar">Urut daftar</option>
                 <option value="tinggi">Kehadiran tertinggi</option>
@@ -979,14 +1095,14 @@ export default function RekapPage() {
 
             {/* Daftar peserta */}
             {participants.length === 0 ? (
-              <div className="mt-4 rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+              <div className="mt-4 rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
                 <h2 className="text-sm font-semibold">Belum ada peserta</h2>
                 <p className="mx-auto mt-1 max-w-xs text-xs text-slate-500">
                   Tambahkan peserta lewat menu Manajemen peserta.
                 </p>
               </div>
             ) : list.length === 0 ? (
-              <div className="mt-4 rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+              <div className="mt-4 rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
                 <h2 className="text-sm font-semibold">Tidak ada hasil</h2>
                 <p className="mt-1 text-xs text-slate-500">Coba kata kunci lain.</p>
               </div>
@@ -1016,14 +1132,18 @@ export default function RekapPage() {
                       </div>
 
                       <div className="mt-3 flex gap-1.5">
-                        {STATUS_KEYS.map((s) => (
-                          <span
-                            key={s}
-                            className={`flex-1 rounded-lg px-2 py-1 text-center text-[11px] font-medium ${STATUS_UI[s].badge}`}
-                          >
-                            {STATUS_UI[s].label} <span className="font-bold">{dataLoading ? "–" : stat[s]}</span>
-                          </span>
-                        ))}
+                        {STATUS_KEYS.map((s) => {
+                          const ui = STATUS_UI[s];
+                          return (
+                            <span
+                              key={s}
+                              className={`flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-1 text-center text-[11px] font-medium ${ui.badge}`}
+                            >
+                              <ui.Icon className="h-3.5 w-3.5 shrink-0" />
+                              {ui.label} <span className="font-bold">{dataLoading ? "–" : stat[s]}</span>
+                            </span>
+                          );
+                        })}
                       </div>
 
                       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
